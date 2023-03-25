@@ -135,15 +135,21 @@ class Preprocessor(ABC):
         raise NotImplementedError("[Preprocessor.parse()]: method not implemented")
     
     @abstractmethod
-    def calc_prob(self):
-        """ calculate possibility of each character and words """
-        raise NotImplementedError("[Preprocessor.calc_freq()]: method not implemented")
+    def calc_prob_chpych(self):
+        """ calculate possibility of each second character conditional on first pinyin given """
+        raise NotImplementedError("[Preprocessor.calc_prob_pych()]: method not implemented")
+    
+    @abstractmethod
+    def calc_prob_dpydch(self):
+        """ calculate possibility of double characters conditional on double pinyin given """
+        raise NotImplementedError("[Preprocessor.calc_prob_dpydch()]: method not implemented")
 
     def run(self):
         self.parse_corpus()
         with open(self.save_path, "w", encoding="gbk") as f:
             f.write(json.dumps(self.count, ensure_ascii=False, indent=4))
-        self.calc_prob()
+        self.calc_prob_chpych()
+        self.calc_prob_dpydch()
         del self.count
 
 
@@ -152,10 +158,11 @@ class BiWordPreprocessor(Preprocessor):
 
     def __init__(self, input_path):
         super().__init__(input_path)
-        self.count = defaultdict(lambda: defaultdict(int))
-        self.freq = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
-        self.prob = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
-        self.save_path = Path.cwd()/"refactored"/"BiCntStat.txt"
+        self.count = defaultdict(lambda: defaultdict(int)) # "BiCntStat(ch-ch).txt"
+        self.freq = defaultdict(lambda: defaultdict(lambda: defaultdict(int))) # "BiCntStat(ch-py-ch)"
+        self.prob = defaultdict(lambda: defaultdict(lambda: defaultdict(float))) # "BiProbStat(ch-py-ch)"
+        self.dprob = defaultdict(lambda: defaultdict(float)) # "BiProbStat(dpy-dch).txt"
+        self.save_path = Path.cwd()/"refactored"/"BiCntStat(ch-ch).txt"
 
     def parse(self):
         for line in self.corpus:
@@ -163,9 +170,9 @@ class BiWordPreprocessor(Preprocessor):
                 self.count[line[i]][line[i+1]] += 1
     
     @metric
-    def calc_prob(self):
-        self.save_path = Path.cwd()/"refactored"/"BiProbStat.txt"
-        for first in tqdm(self.count, desc="generating 'BiProbStat.txt'", unit="phrases"):
+    def calc_prob_chpych(self):
+        self.save_path = Path.cwd()/"refactored"/"BiProbStat(ch-py-ch).txt"
+        for first in tqdm(self.count, desc="generating 'BiProbStat(ch-py-ch).txt'", unit="phrases"):
             for second, freq in self.count[first].items():
                 # TODO: 多音字处理
                 # if len(lazy_pinyin(second)) != 1:
@@ -181,7 +188,28 @@ class BiWordPreprocessor(Preprocessor):
         del self.freq
         with open(self.save_path, "w", encoding="gbk") as f:
             f.write(json.dumps(self.prob, ensure_ascii=False, indent=4))    
-        del self.prob                
+        del self.prob  
+
+    @metric
+    def calc_prob_dpydch(self):
+        self.save_path = Path.cwd()/"refactored"/"BiProbStat(dpy-dch).txt"
+        for first in tqdm(self.count, desc="generating 'BiProbStat(dpy-dch).txt'", unit="phrases"):
+            for second, freq in self.count[first].items():
+                dch = first + second
+                pinyin_first = lazy_pinyin(first)[0]
+                pinyin_second = lazy_pinyin(second)[0]
+                dpy = pinyin_first + " " + pinyin_second
+                self.dprob[dpy][" "] += freq
+                self.dprob[dpy][dch] += freq
+        for dpy in tqdm(self.dprob, desc="cnt => prob...", unit="entries"):
+            for dch in self.dprob[dpy]:
+                if dch != " ":
+                    self.dprob[dpy][dch] = round(self.dprob[dpy][dch] / self.dprob[dpy][" "], 6)
+            del self.dprob[dpy][" "]
+        for entry in tqdm(self.dprob, desc="sorting...", unit="entries"):
+            s = dict(sorted(self.dprob[entry].items(), key=lambda x: x[1], reverse=True))
+            self.dprob[entry] = s
+
 
 if __name__ == "__main__":
     myPreprocessor = BiWordPreprocessor(Path.cwd()/"corpus")

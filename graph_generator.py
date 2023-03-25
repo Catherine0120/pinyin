@@ -13,9 +13,18 @@ import time
 from pathlib import Path
 from typing import List
 import functools
+from collections import defaultdict
 
-ALTERNATIVE = 10
-RANK = 5
+ALTERNATIVE = 10 # how many nodes in each layer are considered
+RANK = 5 # phrases ranking the first RANKth are considered
+JUDGE = 2 # the 1st to JUDGEth largest in "BiProbStat(dpy-dch)"
+BAR = [0.5, 0.2] # should be greater than (BARi)th
+
+def sigmoid(n: float) -> float:
+    if n == 0:
+        return -math.inf
+    else:
+        return math.log(n)
 
 def metric(fn):
     """
@@ -37,10 +46,10 @@ def metric(fn):
 class Node:
     """ the character selected in each layer """
 
-    def __init__(self, pinyin, character, prob=-math.inf):
+    def __init__(self, pinyin, character, prob=0):
         self.pinyin = pinyin
         self.character = character
-        self.prob = prob # maximum probability from the start node
+        self.prob = prob # [0, 1]
         self.next = [] # tuples (index of node in the next layer, conditional probability)
 
 class Graph(object):
@@ -54,11 +63,13 @@ class Graph(object):
     def _IO(self):
         with open(Path.cwd()/"data"/"pinyin_mapping.txt", "r", encoding="gbk") as f:
             self.mapping = json.load(f)
-        with open(Path.cwd()/"refactored"/"BiProbStat.txt", "r", encoding="gbk") as f:
+        with open(Path.cwd()/"refactored"/"BiProbStat(ch-py-ch).txt", "r", encoding="gbk") as f:
             self.stat = json.load(f)
+        with open(Path.cwd()/"refactored"/"BiProbStat(dpy-dch).txt", "r", encoding="gbk") as f:
+            self.check = json.load(f)
         # self.fout = open(Path.cwd()/"output.txt", "w", encoding="gbk")
 
-    @metric   
+    # @metric   
     def _generate_graph(self, sentence: List[str]):
         """
         generate the graph
@@ -69,6 +80,7 @@ class Graph(object):
         self.graph = []
         self.debug_graph = []
         self.n_layer = len(sentence)
+        self.sentence_check = defaultdict(lambda x: defaultdict(float))
         for pinyin in sentence:
             layer = []
             debug_layer = []
@@ -81,12 +93,18 @@ class Graph(object):
                     character = " "
                     layer.append(Node(pinyin, character))
                     debug_layer.append(character)
-                    # print(f"[Warning]: pinyin '{pinyin}' not found or fewer than {ALTERNATIVE} options in table")
             self.graph.append(layer)
             self.debug_graph.append(debug_layer)
-        print(self.debug_graph)
+        for i in range(len(sentence) - 1):
+            phrase = sentence[i] + " " + sentence[i+1]
+            try:
+                self.sentence_check[phrase] = self.check[phrase]
+            except:
+                continue
+
+        # print(self.debug_graph)
     
-    @metric
+    # @metric
     def _generate_transition_matrix(self):
         """ 
         generate the transition matrix
@@ -104,8 +122,8 @@ class Graph(object):
                         prob_table[j][k] = 0
             self.trans.append(prob_table)   
     
-    @metric
-    def _viterbi(self, alpha=0.8, beta=0.2): # TODO
+    # @metric
+    def _viterbi(self, alpha=0.8, beta=0.8): # TODO
         """
         find the max likelihood solution to pinyin translation
         """
@@ -121,35 +139,98 @@ class Graph(object):
                         self.graph[layer][j].next.append((k, cur))
                         max_prob = cur
                 self.graph[layer][j].next = sorted(self.graph[layer][j].next, key=lambda x: x[1], reverse=True)
-        self._debug_print_graph()
+        # self._debug_print_graph()
 
         paths = [] # record the possible path: List
         score = [] # record the corresponding score for each path: float
         debug_paths = []
 
+        flag = True # whether jieba or not, flag == True indicates that it probability encounters a jieba
+
         for i in range(len(self.graph) - 1):
+            # print(self.sentence[i] + " " + self.sentence[i + 1])
+            if i != 0 and flag == True:
+                # print("[debug]: process on jieba, node = {}")
+                group = [] # tuple(k, j, (p, t)): the test score among kth path in previous layers, j in this layer, and p in next layer 
+                for j in range(0, ALTERNATIVE):
+                    node = self.graph[i][j]
+                    for k in range(len(paths)): # TODO
+                        path = paths[k]
+                        group += [(k, j, (node.next[x][0], round( \
+                                                        alpha * sigmoid(node.next[x][1]) \
+                                                        + (1 - alpha) * (beta * sigmoid(node.prob) \
+                                                        + (1 - beta) * sigmoid(self.trans[i-1][path[-1]][j])), 6))) for x in range(len(node.next))]
+                    if len(group) == 0:
+                        group += [(0, j, (0, round(score[0], 6)))]
+                group = sorted(group, key=lambda x: x[2][1], reverse=True)
+                group = group[0:min(RANK, len(group))]
+                new_paths = []
+                new_score = []
+                debug_paths.clear()
+                for minor_path in group:
+                    new_path = paths[minor_path[0]].copy()
+                    new_path.append(minor_path[1])
+                    new_path.append(minor_path[2][0])
+                    debug_paths.append([self.graph[key][new_path[key]].character for key in range(0, len(new_path))])
+                    new_paths.append(new_path)
+                    new_score.append(round(score[minor_path[0]] + minor_path[2][1], 6))
+                score = new_score
+                paths.clear()
+                paths = new_paths
+                del new_paths
+                flag = False
+                # print(f"[layer_{i}]: {debug_paths}")
+                # print(f"[score]: {score}\n")
+                continue
+            
+            flag = True
+
+            try:
+                dict = self.sentence_check[self.sentence[i] + " " + self.sentence[i + 1]]
+                for j, key in enumerate(dict):
+                    if j == JUDGE:
+                        break
+                    bar_value = dict[key]
+                    if bar_value > BAR[j]: # no jieba
+                        flag = False
+            except:
+                flag = False
+                # print("debug")
+                pass
+
             if i == 0:
                 group = [] # tuple(i, (j, t)): the test score between i in layer and j in next-layer
                 for j in range(0, ALTERNATIVE):
                     node = self.graph[i][j]
-                    group += [(j, (node.next[x][0], round(alpha * node.next[x][1] + (1 - alpha) * node.prob, 6))) for x in range(len(node.next))]
+                    group += [(j, (node.next[x][0], round(alpha * sigmoid(node.next[x][1]) + (1 - alpha) * sigmoid(node.prob), 6))) for x in range(len(node.next))]
                 group = sorted(group, key=lambda x: x[1][1], reverse=True)
                 group = group[0:min(RANK, len(group))]
                 for j in range(0, min(RANK, len(group))):
                     paths.append([group[j][0], group[j][1][0]])
                     score.append(group[j][1][1])
                     debug_paths.append([self.graph[i][group[j][0]].character, self.graph[i+1][group[j][1][0]].character])
-                print(f"[layer_{i}]: {debug_paths}")
-                print(f"[score]: {score}\n")
+                # print(f"[layer_{i}]: {debug_paths}")
+                # print(f"[score]: {score}\n")
+                flag = False
+            elif flag == True and i != len(self.graph) - 2 and i != len(self.graph) - 1:
+                # print(f"[jieba]: layer = {i}")
+                continue
             else:
                 group = [] # tuple(path, t): the test score of path
                 for j in range(0, len(paths)):
                     path = paths[j]
-                    for k in self.graph[i][path[i]].next:
-                        new_path = path.copy()
-                        new_path.append(k[0])
-                        t = round(score[j] * k[1], 6)
-                        group.append((new_path, t))
+                    if len(self.graph[i][path[i]].next) == 0:
+                        for k in range(len(self.graph[i+1])):
+                            new_path = path.copy()
+                            new_path.append(k)
+                            t = round(score[j] + alpha * sigmoid(self.graph[i][j].prob) + (1 - alpha) * sigmoid(self.trans[i][path[-1]][k]), 6)
+                            group.append((new_path, t))
+                    else:
+                        for k in self.graph[i][path[i]].next:
+                            new_path = path.copy()
+                            new_path.append(k[0])
+                            t = round(score[j] + alpha * sigmoid(k[1]) + (1 - alpha) * sigmoid(self.graph[i][path[i]].prob), 6)
+                            group.append((new_path, t))
                 group = sorted(group, key=lambda x: x[1], reverse=True)
                 group = group[0:min(RANK, len(group))]
                 paths.clear()
@@ -159,8 +240,16 @@ class Graph(object):
                     paths.append(group[j][0])
                     score.append(group[j][1])
                     debug_paths.append([self.graph[key][group[j][0][key]].character for key in range(0, len(group[j][0]))])
-                print(f"[layer_{i}]: {debug_paths}")
-                print(f"[score]: {score}")
+                # print(f"[layer_{i}]: {debug_paths}")
+                # print(f"[score]: {score}\n")
+
+        # print(debug_paths)
+        # for i in range(len(paths[0])):
+        #     print(self.graph[i][paths[0][i]].character, end="")
+        # print("\n")
+        with open("output.txt", "a", encoding="gbk") as f:
+            f.write("".join(debug_paths[0]))
+            f.write("\n")
 
     
     def _debug_print_graph(self):
@@ -185,10 +274,13 @@ class Graph(object):
 
 if __name__ == "__main__":
     graph = Graph()
+    start_time = time.time()
     with open(Path.cwd()/"input.txt", "r", encoding="utf-8") as f:
         line = f.readline()
         while line:
             sentence = line.strip().split(" ")
-            print(sentence)
             graph.run(sentence)
             line = f.readline()
+    end_time = time.time()
+    duration = round(end_time - start_time, 6) 
+    print(f"[INFO ] program finished in {duration} seconds")
