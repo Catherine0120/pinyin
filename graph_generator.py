@@ -67,6 +67,8 @@ class Graph(object):
             self.stat = json.load(f)
         with open(Path.cwd()/"refactored"/"BiProbStat(dpy-dch).txt", "r", encoding="gbk") as f:
             self.check = json.load(f)
+        with open("output.txt", "w", encoding="gbk") as f:
+            pass
         # self.fout = open(Path.cwd()/"output.txt", "w", encoding="gbk")
 
     # @metric   
@@ -123,7 +125,7 @@ class Graph(object):
             self.trans.append(prob_table)   
     
     # @metric
-    def _viterbi(self, alpha=0.8, beta=0.8): # TODO
+    def _viterbi(self, alpha=0.9, beta=0.2): # TODO
         """
         find the max likelihood solution to pinyin translation
         """
@@ -249,7 +251,8 @@ class Graph(object):
         # print("\n")
         with open("output.txt", "a", encoding="gbk") as f:
             f.write("".join(debug_paths[0]))
-            f.write("\n")
+            if i != self.n_layer - 1:
+                f.write("\n")
 
     
     def _debug_print_graph(self):
