@@ -56,9 +56,11 @@ class Graph(object):
             self.mapping = json.load(f)
         with open(Path.cwd()/"refactored"/"BiProbStat.txt", "r", encoding="gbk") as f:
             self.stat = json.load(f)
+        with open("output.txt", "w", encoding="gbk") as f:
+            pass
         # self.fout = open(Path.cwd()/"output.txt", "w", encoding="gbk")
 
-    @metric   
+    # @metric   
     def _generate_graph(self, sentence: List[str]):
         """
         generate the graph
@@ -84,9 +86,9 @@ class Graph(object):
                     # print(f"[Warning]: pinyin '{pinyin}' not found or fewer than {ALTERNATIVE} options in table")
             self.graph.append(layer)
             self.debug_graph.append(debug_layer)
-        print(self.debug_graph)
+        # print(self.debug_graph)
     
-    @metric
+    # @metric
     def _generate_transition_matrix(self):
         """ 
         generate the transition matrix
@@ -104,8 +106,7 @@ class Graph(object):
                         prob_table[j][k] = 0
             self.trans.append(prob_table)   
     
-    @metric
-    def _viterbi(self, alpha=0.8, beta=0.2): # TODO
+    def _viterbi(self, alpha=0.5) -> list: # TODO
         """
         find the max likelihood solution to pinyin translation
         """
@@ -115,13 +116,13 @@ class Graph(object):
             for j in range(len(self.trans[layer])):
                 for k in range(len(self.trans[layer][j])):
                     cur = self.trans[layer][j][k]
-                    if cur >= (max_prob / 2) and cur > 0:
-                        while (len(self.graph[layer][j].next) > 0) and (self.graph[layer][j].next[-1][1] < (cur / 3)):
+                    if cur >= (max_prob / 8) and cur > 0:
+                        while (len(self.graph[layer][j].next) > 0) and (self.graph[layer][j].next[-1][1] < (cur / 5)):
                             self.graph[layer][j].next.pop()
                         self.graph[layer][j].next.append((k, cur))
                         max_prob = cur
                 self.graph[layer][j].next = sorted(self.graph[layer][j].next, key=lambda x: x[1], reverse=True)
-        self._debug_print_graph()
+        # self._debug_print_graph()
 
         paths = [] # record the possible path: List
         score = [] # record the corresponding score for each path: float
@@ -139,8 +140,8 @@ class Graph(object):
                     paths.append([group[j][0], group[j][1][0]])
                     score.append(group[j][1][1])
                     debug_paths.append([self.graph[i][group[j][0]].character, self.graph[i+1][group[j][1][0]].character])
-                print(f"[layer_{i}]: {debug_paths}")
-                print(f"[score]: {score}\n")
+                # print(f"[layer_{i}]: {debug_paths}")
+                # print(f"[score]: {score}\n")
             else:
                 group = [] # tuple(path, t): the test score of path
                 for j in range(0, len(paths)):
@@ -150,6 +151,14 @@ class Graph(object):
                         new_path.append(k[0])
                         t = round(score[j] * k[1], 6)
                         group.append((new_path, t))
+                if len(group) < 1:
+                    for i in range(0, min(len(paths), 3)):
+                        for j in range(0, 2):
+                            new_path = paths[i].copy()
+                            new_path.append(j)
+                            t = round(score[0] * self.graph[i+1][j].prob, 6)
+                            group.append((new_path, t))
+                    
                 group = sorted(group, key=lambda x: x[1], reverse=True)
                 group = group[0:min(RANK, len(group))]
                 paths.clear()
@@ -159,8 +168,9 @@ class Graph(object):
                     paths.append(group[j][0])
                     score.append(group[j][1])
                     debug_paths.append([self.graph[key][group[j][0][key]].character for key in range(0, len(group[j][0]))])
-                print(f"[layer_{i}]: {debug_paths}")
-                print(f"[score]: {score}")
+                # print(f"[layer_{i}]: {debug_paths}")
+                # print(f"[score]: {score}")
+        return debug_paths[0]
 
     
     def _debug_print_graph(self):
@@ -175,20 +185,25 @@ class Graph(object):
                     print("\n", end="")
         print()
     
-    def run(self, sentence: List[str]):
+    def run(self, sentence: List[str]) -> list:
         self._generate_graph(sentence)
         self._generate_transition_matrix()
-        self._viterbi()
-        del self.graph
-        del self.trans
+        return self._viterbi()
 
 
 if __name__ == "__main__":
     graph = Graph()
+    start_time = time.time()
     with open(Path.cwd()/"input.txt", "r", encoding="utf-8") as f:
         line = f.readline()
         while line:
             sentence = line.strip().split(" ")
-            print(sentence)
-            graph.run(sentence)
-            line = f.readline()
+            ans = graph.run(sentence)
+            with open("output.txt", "a", encoding="gbk") as fl:
+                fl.write("".join(ans))
+                line = f.readline()
+                if line:
+                    fl.write("\n")
+    end_time = time.time()
+    duration = round(end_time - start_time, 6) 
+    print(f"[Timer ] program finished in {duration} seconds")
