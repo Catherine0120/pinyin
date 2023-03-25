@@ -15,10 +15,10 @@ from typing import List
 import functools
 from collections import defaultdict
 
-ALTERNATIVE = 10 # how many nodes in each layer are considered
-RANK = 5 # phrases ranking the first RANKth are considered
+ALTERNATIVE = 35 # how many nodes in each layer are considered
+RANK = 25 # phrases ranking the first RANKth are considered
 JUDGE = 2 # the 1st to JUDGEth largest in "BiProbStat(dpy-dch)"
-BAR = [0.5, 0.2] # should be greater than (BARi)th
+BAR = [0.3, 0.2] # should be greater than (BARi)th
 
 def sigmoid(n: float) -> float:
     if n == 0:
@@ -135,8 +135,8 @@ class Graph(object):
             for j in range(len(self.trans[layer])):
                 for k in range(len(self.trans[layer][j])):
                     cur = self.trans[layer][j][k]
-                    if cur >= (max_prob / 2) and cur > 0:
-                        while (len(self.graph[layer][j].next) > 0) and (self.graph[layer][j].next[-1][1] < (cur / 3)):
+                    if cur >= (max_prob / 8) and cur > 0:
+                        while (len(self.graph[layer][j].next) > 0) and (self.graph[layer][j].next[-1][1] < (cur / 4)):
                             self.graph[layer][j].next.pop()
                         self.graph[layer][j].next.append((k, cur))
                         max_prob = cur
