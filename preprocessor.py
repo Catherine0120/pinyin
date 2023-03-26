@@ -133,25 +133,10 @@ class Preprocessor(ABC):
     @abstractmethod
     def parse(self):
         raise NotImplementedError("[Preprocessor.parse()]: method not implemented")
-    
-    @abstractmethod
-    def calc_prob_chpych(self):
-        """ calculate possibility of each second character conditional on first pinyin given """
-        raise NotImplementedError("[Preprocessor.calc_prob_pych()]: method not implemented")
-    
-    @abstractmethod
-    def calc_prob_dpydch(self):
-        """ calculate possibility of double characters conditional on double pinyin given """
-        raise NotImplementedError("[Preprocessor.calc_prob_dpydch()]: method not implemented")
 
+    @abstractmethod
     def run(self):
-        self.parse_corpus()
-        with open(self.save_path, "w", encoding="gbk") as f:
-            f.write(json.dumps(self.count, ensure_ascii=False, indent=4))
-        self.calc_prob_chpych()
-        self.calc_prob_dpydch()
-        del self.count
-
+        raise NotImplementedError("[Preprocessor.run()]: method not implemented")
 
 class BiWordPreprocessor(Preprocessor):
     """ preprocessor based on binary grammar """
@@ -209,8 +194,63 @@ class BiWordPreprocessor(Preprocessor):
         for entry in tqdm(self.dprob, desc="sorting...", unit="entries"):
             s = dict(sorted(self.dprob[entry].items(), key=lambda x: x[1], reverse=True))
             self.dprob[entry] = s
+    
+    def run(self):
+        self.parse_corpus()
+        with open(self.save_path, "w", encoding="gbk") as f:
+            f.write(json.dumps(self.count, ensure_ascii=False, indent=4))
+        self.calc_prob_chpych()
+        self.calc_prob_dpydch()
+        del self.count
 
+class TriWordPreprocessor(Preprocessor):
+    """ preprocessor based on triple grammar """
+
+    def __init__(self, input_path):
+        super().__init__(input_path)
+        self.count = defaultdict(lambda: defaultdict(int)) # "TriCntStat(dch-ch).txt"
+        self.freq = defaultdict(lambda: defaultdict(lambda: defaultdict(int))) # "TriCntStat(dch-py-ch)"
+        self.prob = defaultdict(lambda: defaultdict(lambda: defaultdict(float))) # "TriProbStat(dch-py-ch)"
+        self.save_path = Path.cwd()/"refactored"/"TriCntStat(dch-py-ch).txt"
+    
+    def parse(self):
+        for line in self.corpus:
+            for i in range(len(line) - 2):
+                self.count[line[i] + line[i+1]][line[i+2]] += 1
+
+    def run(self):
+        self.parse_corpus()
+        self.IO()
+        self.calc_prob_dchpych()
+        del self.count
+
+    @metric
+    def IO(self):
+        with open(self.save_path, "w", encoding="gbk") as f:
+            f.write(json.dumps(self.count, ensure_ascii=False, indent=4))
+    
+    @metric
+    def calc_prob_dchpych(self):
+        self.save_path = Path.cwd()/"refactored"/"TriProbStat(dch-py-ch).txt"
+        for first in tqdm(self.count, desc="generating 'TriProbStat(dch-py-ch).txt'", unit="phrases"):
+            for second, freq in self.count[first].items():
+                # TODO: 多音字处理
+                # if len(lazy_pinyin(second)) != 1:
+                #     print(lazy_pinyin(second))
+                pinyin = lazy_pinyin(second)[0]
+                self.freq[first][pinyin][" "] += freq
+                self.freq[first][pinyin][second] += freq
+        for first in self.freq:
+            for second in self.freq[first]:
+                for character in self.freq[first][second]:
+                    self.prob[first][second][character] = round(self.freq[first][second][character] / self.freq[first][second][" "], 6)
+                del self.prob[first][second][" "]
+        del self.freq
+        with open(self.save_path, "w", encoding="gbk") as f:
+            f.write(json.dumps(self.prob, ensure_ascii=False, indent=4))    
+        del self.prob  
 
 if __name__ == "__main__":
-    myPreprocessor = BiWordPreprocessor(Path.cwd()/"corpus")
+    # myPreprocessor = BiWordPreprocessor(Path.cwd()/"corpus")
+    myPreprocessor = TriWordPreprocessor(Path.cwd()/"corpus")
     myPreprocessor.run()
