@@ -14,7 +14,7 @@ Output:
     2.  三元模型依赖文件（也包括部分以上二元模型依赖文件）
         "./refactored/TriCntStat(dch-py-ch).txt": {"清华": {"da": {"大": 900, "达": 100}}}
         "./refactored/TriProbStat(dch-py-ch).txt": {"清华": {"da": {"大": 0.9, "达": 0.1}}}
-        "./refactored/InitialTriProbStat(dpy-dch).txt": 同上, 但只统计每一个phrase的首字词
+        "./refactored/InitialTriProbStat(tpy-tch).txt": 同上, 但只统计每一个phrase的首字词
 """
 
 import functools

@@ -1,6 +1,7 @@
 import argparse
 from graph_generator_3w import tri_gram_generator
 from graph_generator_2w import bi_gram_generator
+from graph_generator_naive import naive_bi_gram_generator
 from validator import test
 
 def run(model: str, input_path: str, output_path: str, t: bool, std_output: str):
@@ -9,7 +10,7 @@ def run(model: str, input_path: str, output_path: str, t: bool, std_output: str)
         print("[Error]: Please provides std_output file path")
         return
     if model == "bigram":
-        pass
+        naive_bi_gram_generator(input_path, output_path)
     if model == "bigram+":
         bi_gram_generator(input_path, output_path)
     if model == "trigram":
