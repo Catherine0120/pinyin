@@ -22,7 +22,7 @@ for i in range(0, min(len(file1), len(file2))):
     line1 = file1[i]
     line2 = file2[i]
     if len(line1) != len(line2):
-        print(f"[wrong]: {i}, line1.len = {len(line1)}, line2.len = {len(line2)}")
+        print(f"[wrong line[{i}] length]: line1.len = {len(line1)}, line2.len = {len(line2)}")
         continue
     word_cnt += min(len(line1), len(line2))
     flag = True

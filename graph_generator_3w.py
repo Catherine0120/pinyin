@@ -16,9 +16,45 @@ from typing import List
 import functools
 from collections import defaultdict
 
-ALTERNATIVE = 25 # how many nodes in each layer are considered
-PARAMETER = [0.3, 0.5, 0.2] # weights for three conditional probabilities 
-PARAMETER2 = [0.9, 0.1]
+ALTERNATIVE = 20 # how many nodes in each layer are considered
+PARAMETER = [0.75, 0.2, 0.05] # weights for three conditional probabilities 
+PARAMETER2 = [0.4, 0.6]
+
+""" 
+[log]: (子准确率，词准确率)
+PARAMETER = [0.75, 0.2, 0.05]
+PARAMETER2 = [0.4, 0.6]
+    ALTERNATIVE = 10: (0.8793, 0.5070)
+    ALTERNATIVE = 15: (0.8795, 0.5050)
+    ALTERNATIVE = 18: (0.8797, 0.5070)
+    ALTERNATIVE = 20: (0.8799, 0.5090) ✓
+    ALTERNATIVE = 25: (0.8795, 0.5090)
+    ALTERNATIVE = 30: (0.8786, 0.5090)
+
+ALTERNATIVE = 25
+PARAMETER2 = [0.4, 0.6]
+    PARAMETER = [0.2, 0.6, 0.2]: (0.8701, 0.4431)
+    PARAMETER = [0.3, 0.4, 0.3]: (0.8704, 0.4611)
+    PARAMETER = [0.3, 0.5, 0.2]: (0.8749, 0.4671)
+    PARAMETER = [0.4, 0.4, 0.1]: (0.8776, 0.4850) 
+    PARAMETER = [0.5, 0.3, 0.2]: (0.8772, 0.4890) 
+    PARAMETER = [0.6, 0.3, 0.1]: (0.8788, 0.4950) 
+    PARAMETER = [0.7, 0.2, 0.1]: (0.8793, 0.5050) 
+    PARAMETER = [0.75, 0.2, 0.05]: (0.8795, 0.5090) ✓
+    PARAMETER = [0.75, 0.1, 0.15]: (0.8776, 0.5030)
+    PARAMETER = [0.8, 0.15, 0.05]: (0.8790, 0.5110) 
+    PARAMETER = [0.9, 0.08, 0.02]: (0.8779, 0.5070)
+
+ALTERNATIVE = 25
+PARAMETER = [0.3, 0.5, 0.2]
+    PARAMETER2 = [0.9, 0.1]: (0.8727, 0.4631)
+    PARAMETER2 = [0.8, 0.2]: (0.8739, 0.4651)
+    PARAMETER2 = [0.5, 0.5]: (0.8743, 0.4651)
+    PARAMETER2 = [0.4, 0.6]: (0.8749, 0.4671) ✓
+    PARAMETER2 = [0.3, 0.7]: (0.8744, 0.4671)
+    PARAMETER2 = [0.2, 0.8]: (0.8741, 0.4671)
+    PARAMETER2 = [0.1, 0.9]: (0.8738, 0.4671)
+"""
 
 def sigmoid(n: float) -> float:
     if n == 0:
@@ -67,17 +103,18 @@ class Graph(object):
             self.tstat = json.load(f)
         with open("output.txt", "w", encoding="gbk") as f:
             pass
+        with open(Path.cwd()/"refactored"/"InitialBiProbStat(dpy-dch).txt", "r", encoding="gbk") as bf:
+            self.bi_init = json.load(bf)
+        with open(Path.cwd()/"refactored"/"InitialTriProbStat(tpy-tch).txt", "r", encoding="gbk") as tf:
+            self.tri_init = json.load(tf)
 
     def _viterbi(self):
         paths = []
         scores = []
         flag = 0
         init_flag = True
+        bi_dict2_flag = True
 
-        with open(Path.cwd()/"refactored"/"InitialBiProbStat(dpy-dch).txt", "r", encoding="gbk") as bf:
-            bi_init = json.load(bf)
-        with open(Path.cwd()/"refactored"/"InitialTriProbStat(tpy-tch).txt", "r", encoding="gbk") as tf:
-            tri_init = json.load(tf)
         if self.n_layer < 3:
             print("[catch ERROR]: sentence length smaller than 3")
             with open("output.txt", "a", encoding="gbk") as f:
@@ -89,15 +126,17 @@ class Graph(object):
         bi_pinyin2 = self.sentence[1] + " " + self.sentence[2]
         tri_pinyin = self.sentence[0] + " " + self.sentence[1] + " " + self.sentence[2]
         try:
-            bi_dict1 = bi_init[bi_pinyin1]
-            bi_dict2 = bi_init[bi_pinyin2]
+            bi_dict1 = self.bi_init[bi_pinyin1]
         except:
-            print(f"[catch Error]: {bi_pinyin1} or {bi_pinyin2} not found")
             init_flag = False
 
-        if init_flag == True: # cannot find the possible dch for the initial dpy
+        if init_flag == True: # can find the possible dch for the initial dpy
             try:
-                tri_dict = tri_init[tri_pinyin]    
+                bi_dict2 = self.bi_init[bi_pinyin2]
+            except:
+                bi_dict2_flag = False
+            try:
+                tri_dict = self.tri_init[tri_pinyin]    
                 for tri_phrase, tri_val in tri_dict.items():
                     try:
                         bi_val1 = bi_dict1[tri_phrase[0:2]]
@@ -106,16 +145,13 @@ class Graph(object):
                         single_val3 = self.mapping[self.sentence[2]][tri_phrase[2]]
                     except:
                         continue
-                    try:
-                        bi_val2 = bi_dict2[tri_phrase[1:3]]
-                    except:
-                        score = PARAMETER[0] * sigmoid(tri_val) + \
-                                PARAMETER[1] * sigmoid(bi_val1) + \
-                                PARAMETER[2] * sigmoid((single_val1 * single_val2 * single_val3) ** (1/3))
-                        path = [tri_phrase[0], tri_phrase[1], tri_phrase[2]]
-                        paths.append(path)
-                        scores.append(score)
-                        continue
+                    if bi_dict2_flag == True:
+                        try:
+                            bi_val2 = bi_dict2[tri_phrase[1:3]]
+                        except:
+                            bi_val2 = bi_val1
+                    else:
+                        bi_val2 = bi_val1
 
                     score = PARAMETER[0] * sigmoid(tri_val) + \
                             PARAMETER[1] * sigmoid((bi_val1 * bi_val2) ** (1/2)) + \
@@ -124,8 +160,9 @@ class Graph(object):
                     paths.append(path)
                     scores.append(score)
             except:
-                print(f"[catch Error]: {tri_pinyin} not found")
-            if len(paths) == 0:
+                pass
+
+            if len(paths) == 0: # cannot generate tri_dict
                 flag = 1
                 for bi_phrase, bi_val in bi_dict1.items():
                     try:
@@ -215,7 +252,7 @@ class Graph(object):
                 cur_paths += tp[0]
                 cur_scores += tp[1]
 
-            if len(cur_paths) == 0:
+            if len(cur_paths) == 0: # bi-model
                 for index, path in enumerate(paths):
                     try:
                         bi_dict = self.dstat[path[-1]][self.sentence[i]]
@@ -237,7 +274,7 @@ class Graph(object):
                     cur_paths += tp[0]
                     cur_scores += tp[1]
             
-            if len(cur_paths) == 0:
+            if len(cur_paths) == 0: # tri-model
                 for index, path in enumerate(paths):
                     new_paths = []
                     new_scores = []
