@@ -89,7 +89,8 @@ def metric(fn):
 class Graph(object):
     """ character graph """
 
-    def __init__(self):
+    def __init__(self, output):
+        self.output_path = output
         self._IO()
         self.sentence = " "
     
@@ -101,7 +102,7 @@ class Graph(object):
             self.dstat = json.load(f)
         with open(Path.cwd()/"refactored"/"TriProbStat(dch-py-ch).txt", "r", encoding="gbk") as f:
             self.tstat = json.load(f)
-        with open("output.txt", "w", encoding="gbk") as f:
+        with open(self.output_path, "w", encoding="gbk") as f:
             pass
         with open(Path.cwd()/"refactored"/"InitialBiProbStat(dpy-dch).txt", "r", encoding="gbk") as bf:
             self.bi_init = json.load(bf)
@@ -117,7 +118,7 @@ class Graph(object):
 
         if self.n_layer < 3:
             print("[catch ERROR]: sentence length smaller than 3")
-            with open("output.txt", "a", encoding="gbk") as f:
+            with open(self.output_path, "a", encoding="gbk") as f:
                 f.write("\n")
             return
 
@@ -294,7 +295,7 @@ class Graph(object):
             paths = tp[0]
             scores = tp[1]
         
-        with open("output.txt", "a", encoding="gbk") as f:
+        with open(self.output_path, "a", encoding="gbk") as f:
             try:
                 f.write("".join(paths[0]))
                 f.write("\n")
@@ -307,10 +308,10 @@ class Graph(object):
         self._viterbi()
 
 
-if __name__ == "__main__":
-    graph = Graph()
+def tri_gram_generator(input_path: str, output: str):
+    graph = Graph(output)
     start_time = time.time()
-    with open(Path.cwd()/"input.txt", "r", encoding="utf-8") as f:
+    with open(Path.cwd()/input_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
         for line in tqdm(lines, desc="processing each sentence... ", unit="lines"):
             sentence = line.strip().split(" ")

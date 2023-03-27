@@ -56,7 +56,8 @@ class Node:
 class Graph(object):
     """ character graph """
 
-    def __init__(self):
+    def __init__(self, output):
+        self.output_path = output
         self._IO()
         self.sentence = " "
 
@@ -68,9 +69,8 @@ class Graph(object):
             self.stat = json.load(f)
         with open(Path.cwd()/"refactored"/"BiProbStat(dpy-dch).txt", "r", encoding="gbk") as f:
             self.check = json.load(f)
-        with open("output.txt", "w", encoding="gbk") as f:
+        with open(self.output_path, "w", encoding="gbk") as f:
             pass
-        # self.fout = open(Path.cwd()/"output.txt", "w", encoding="gbk")
 
     # @metric   
     def _generate_graph(self, sentence: List[str]):
@@ -142,7 +142,6 @@ class Graph(object):
                         self.graph[layer][j].next.append((k, cur))
                         max_prob = cur
                 self.graph[layer][j].next = sorted(self.graph[layer][j].next, key=lambda x: x[1], reverse=True)
-        # self._debug_print_graph()
 
         paths = [] # record the possible path: List
         score = [] # record the corresponding score for each path: float
@@ -151,9 +150,7 @@ class Graph(object):
         flag = True # whether jieba or not, flag == True indicates that it probability encounters a jieba
 
         for i in range(len(self.graph) - 1):
-            # print(self.sentence[i] + " " + self.sentence[i + 1])
             if i != 0 and flag == True:
-                # print("[debug]: process on jieba, node = {}")
                 group = [] # tuple(k, j, (p, t)): the test score among kth path in previous layers, j in this layer, and p in next layer 
                 for j in range(0, ALTERNATIVE):
                     node = self.graph[i][j]
@@ -182,8 +179,6 @@ class Graph(object):
                 paths = new_paths
                 del new_paths
                 flag = False
-                # print(f"[layer_{i}]: {debug_paths}")
-                # print(f"[score]: {score}\n")
                 continue
             
             flag = True
@@ -198,7 +193,6 @@ class Graph(object):
                         flag = False
             except:
                 flag = False
-                # print("debug")
                 pass
 
             if i == 0:
@@ -212,11 +206,8 @@ class Graph(object):
                     paths.append([group[j][0], group[j][1][0]])
                     score.append(group[j][1][1])
                     debug_paths.append([self.graph[i][group[j][0]].character, self.graph[i+1][group[j][1][0]].character])
-                # print(f"[layer_{i}]: {debug_paths}")
-                # print(f"[score]: {score}\n")
                 flag = False
             elif flag == True and i != len(self.graph) - 2 and i != len(self.graph) - 1:
-                # print(f"[jieba]: layer = {i}")
                 continue
             else:
                 group = [] # tuple(path, t): the test score of path
@@ -243,14 +234,9 @@ class Graph(object):
                     paths.append(group[j][0])
                     score.append(group[j][1])
                     debug_paths.append([self.graph[key][group[j][0][key]].character for key in range(0, len(group[j][0]))])
-                # print(f"[layer_{i}]: {debug_paths}")
-                # print(f"[score]: {score}\n")
 
-        # print(debug_paths)
-        # for i in range(len(paths[0])):
-        #     print(self.graph[i][paths[0][i]].character, end="")
-        # print("\n")
-        with open("output.txt", "a", encoding="gbk") as f:
+
+        with open(self.output_path, "a", encoding="gbk") as f:
             f.write("".join(debug_paths[0]))
             if i != self.n_layer - 1:
                 f.write("\n")
@@ -276,15 +262,14 @@ class Graph(object):
         del self.trans
 
 
-if __name__ == "__main__":
-    graph = Graph()
+def bi_gram_generator(input_path: str, output: str):
+    graph = Graph(output)
     start_time = time.time()
-    with open(Path.cwd()/"input.txt", "r", encoding="utf-8") as f:
-        line = f.readline()
-        while line:
+    with open(Path.cwd()/input_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+        for line in tqdm(lines, desc="processing each sentence... ", unit="lines"):
             sentence = line.strip().split(" ")
             graph.run(sentence)
-            line = f.readline()
     end_time = time.time()
     duration = round(end_time - start_time, 6) 
     print(f"[INFO ] program finished in {duration} seconds")
