@@ -23,6 +23,7 @@ for i in range(0, min(len(file1), len(file2))):
     line2 = file2[i]
     if len(line1) != len(line2):
         print(f"[wrong]: {i}, line1.len = {len(line1)}, line2.len = {len(line2)}")
+        continue
     word_cnt += min(len(line1), len(line2))
     flag = True
     for j in range(0, min(len(line1), len(line2))):
@@ -33,4 +34,4 @@ for i in range(0, min(len(file1), len(file2))):
     if flag == True:
         line_correct += 1
             
-print(f"[word accuracy] = {word_correct} / {word_cnt}, [sentence accuracy] = {line_correct} / {len(file1)}")
+print(f"[word accuracy] = {word_correct / word_cnt}, [sentence accuracy] = {line_correct / len(file1)}")
