@@ -199,6 +199,24 @@ class Preprocessor(ABC):
             f.write(json.dumps(self.tprob, ensure_ascii=False, indent=4))    
         del self.tprob
 
+    def calc_prob_chch(cntPath, probPath):
+        reverse_table = {}
+        with open(cntPath, "r", encoding="gbk") as f:
+            table = json.load(f)
+        for key, val in tqdm(table.items(), desc="processing entries", unit="entries"):
+            cnt = 0
+            small_table = {}
+            for k, v in val.items():
+                cnt += v
+            for k, v in val.items():
+                v = round(v / cnt, 6)
+                small_table[k] = v
+            reverse_table[key] = small_table
+
+        with open(probPath, "w", encoding="gbk") as f:
+            f.write(json.dumps(reverse_table, ensure_ascii=False, indent=4))
+            
+
 class BiWordPreprocessor(Preprocessor):
     """ preprocessor based on binary grammar """
 
@@ -265,6 +283,7 @@ class BiWordPreprocessor(Preprocessor):
             f.write(json.dumps(self.count, ensure_ascii=False, indent=4))
         self.calc_prob_chpych()
         self.calc_prob_dpydch()
+        self.calc_prob_chch("./refactored/BiCntStat(ch-ch).txt", "./refactored/BiProbStat(ch-ch).txt")
         del self.count
 
 class TriWordPreprocessor(Preprocessor):
@@ -286,6 +305,7 @@ class TriWordPreprocessor(Preprocessor):
         self.parse_corpus()
         self.IO()
         self.calc_prob_dchpych()
+        self.calc_prob_chch("./refactored/TriCntStat(dch-py-ch).txt", "./refactored/TriProbStat(dch-ch).txt")
         del self.count
 
     @metric
