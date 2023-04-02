@@ -4,7 +4,7 @@ pre-process the corpus
 Input: "./corpus/X.txt", X.txt records corpus drawn from sina
 Output: 
     0.  一元模型依赖文件（辅助文件）
-        "./src/pinyin_mapping.txt": {"qing": {"清": 0.9, "情": 0.1}}
+        "./data/pinyin_mapping.txt": {"qing": {"清": 0.9, "情": 0.1}}
         "./refactored/SingleCntStat.txt": {"清": 900, "情": 100}
     1.  二元模型依赖文件
         "./refactored/BiCntStat(ch-ch).txt": {"清": {"华": 900, "划": 1000}}
@@ -56,7 +56,7 @@ class Preprocessor(ABC):
         self.count = defaultdict(int)
         self.dprob = defaultdict(lambda: defaultdict(float)) # "InitialBiProbStat(dpy-dch).txt"
         self.tprob = defaultdict(lambda: defaultdict(float)) # "InitialTriProbStat(tpy-tch).txt"
-        self.save_path = Path.cwd()/"SingleCntStat.txt"
+        self.save_path = Path.cwd()/"refactored"/"SingleCntStat.txt"
 
         if path.isdir(input_path):
             self.pathes = list(map(lambda x: path.join(input_path, x), listdir(input_path)))
@@ -65,7 +65,7 @@ class Preprocessor(ABC):
         else:
             raise ValueError("[Preprocessor.__init__()]: input_path is not a file or directory")
         
-        """ initialize "SingleCntStat.txt" and "pinyin_mapping.txt" """
+        """ initialize "./refactored/SingleCntStat.txt" and "./data/pinyin_mapping.txt" """
         self.__process_table()
         self.__parse_corpus() # SingleCntStat save to self.count temporarily
         self.__init_mapping() # generate "pinyin_mapping.txt" and "SingleCntStat.txt"
@@ -73,14 +73,14 @@ class Preprocessor(ABC):
             f.write(json.dumps(self.count, ensure_ascii=False, indent=4))
         del self.count
 
-        """ initialize "InitialXProbStat.txt" """
+        """ initialize "./refactored/InitialXProbStat.txt" """
         self.parse_corpus() # generate "InitialXProbStat.txt"
         self.generate_files()
     
     def __process_table(self):
         """ initialize "./data/pinyin_mapping.txt" using "look-up_table.txt" """
-        address = Path.cwd()/"look-up_table.txt"
-        destination = Path.cwd()/"pinyin_mapping.txt"
+        address = Path.cwd()/"data"/"look-up_table.txt"
+        destination = Path.cwd()/"data"/"pinyin_mapping.txt"
         table = {}
         with open(address, "r", encoding="gbk", errors="ignore") as f:
             for line in tqdm(f, desc="processing 'look-up_table.txt'", unit="lines"):
@@ -125,7 +125,7 @@ class Preprocessor(ABC):
                 total = len(my_dict)
             for word in my_dict:
                 my_dict[word] = round(my_dict[word] / total, 6)
-        with open(Path.cwd()/"pinyin_mapping.txt", "w", encoding="gbk") as f:
+        with open(Path.cwd()/"data"/"pinyin_mapping.txt", "w", encoding="gbk") as f:
             f.write(json.dumps(self.map, ensure_ascii=False, indent=4))
         del self.map
 
@@ -183,7 +183,7 @@ class Preprocessor(ABC):
         for entry in tqdm(self.dprob, desc="[dprob]: sorting... ", unit="entries"):
             s = dict(sorted(self.dprob[entry].items(), key=lambda x: x[1], reverse=True))
             self.dprob[entry] = s
-        with open(Path.cwd()/".."/"refactored"/"InitialBiProbStat(dpy-dch).txt", "w", encoding="gbk") as f:
+        with open(Path.cwd()/"refactored"/"InitialBiProbStat(dpy-dch).txt", "w", encoding="gbk") as f:
             f.write(json.dumps(self.dprob, ensure_ascii=False, indent=4))    
         del self.dprob
 
@@ -195,9 +195,27 @@ class Preprocessor(ABC):
         for entry in tqdm(self.tprob, desc="[tprob]: sorting... ", unit="entries"):
             s = dict(sorted(self.tprob[entry].items(), key=lambda x: x[1], reverse=True))
             self.tprob[entry] = s
-        with open(Path.cwd()/".."/"refactored"/"InitialTriProbStat(tpy-tch).txt", "w", encoding="gbk") as f:
+        with open(Path.cwd()/"refactored"/"InitialTriProbStat(tpy-tch).txt", "w", encoding="gbk") as f:
             f.write(json.dumps(self.tprob, ensure_ascii=False, indent=4))    
         del self.tprob
+
+    def calc_prob_chch(cntPath, probPath):
+        reverse_table = {}
+        with open(cntPath, "r", encoding="gbk") as f:
+            table = json.load(f)
+        for key, val in tqdm(table.items(), desc="processing entries", unit="entries"):
+            cnt = 0
+            small_table = {}
+            for k, v in val.items():
+                cnt += v
+            for k, v in val.items():
+                v = round(v / cnt, 6)
+                small_table[k] = v
+            reverse_table[key] = small_table
+
+        with open(probPath, "w", encoding="gbk") as f:
+            f.write(json.dumps(reverse_table, ensure_ascii=False, indent=4))
+            
 
 class BiWordPreprocessor(Preprocessor):
     """ preprocessor based on binary grammar """
@@ -208,7 +226,7 @@ class BiWordPreprocessor(Preprocessor):
         self.freq = defaultdict(lambda: defaultdict(lambda: defaultdict(int))) # "BiCntStat(ch-py-ch)"
         self.prob = defaultdict(lambda: defaultdict(lambda: defaultdict(float))) # "BiProbStat(ch-py-ch)"
         self.dprob = defaultdict(lambda: defaultdict(float)) # "BiProbStat(dpy-dch).txt"
-        self.save_path = Path.cwd()/".."/"refactored"/"BiCntStat(ch-ch).txt"
+        self.save_path = Path.cwd()/"refactored"/"BiCntStat(ch-ch).txt"
 
     def parse(self):
         for line in self.corpus:
@@ -217,7 +235,7 @@ class BiWordPreprocessor(Preprocessor):
     
     @metric
     def calc_prob_chpych(self):
-        self.save_path = Path.cwd()/".."/"refactored"/"BiProbStat(ch-py-ch).txt"
+        self.save_path = Path.cwd()/"refactored"/"BiProbStat(ch-py-ch).txt"
         for first in tqdm(self.count, desc="generating 'BiProbStat(ch-py-ch).txt'", unit="phrases"):
             for second, freq in self.count[first].items():
                 # TODO: 多音字处理
@@ -238,7 +256,7 @@ class BiWordPreprocessor(Preprocessor):
 
     @metric
     def calc_prob_dpydch(self):
-        self.save_path = Path.cwd()/".."/"refactored"/"BiProbStat(dpy-dch).txt"
+        self.save_path = Path.cwd()/"refactored"/"BiProbStat(dpy-dch).txt"
         for first in tqdm(self.count, desc="generating 'BiProbStat(dpy-dch).txt'", unit="phrases"):
             for second, freq in self.count[first].items():
                 dch = first + second
@@ -265,6 +283,7 @@ class BiWordPreprocessor(Preprocessor):
             f.write(json.dumps(self.count, ensure_ascii=False, indent=4))
         self.calc_prob_chpych()
         self.calc_prob_dpydch()
+        self.calc_prob_chch("./refactored/BiCntStat(ch-ch).txt", "./refactored/BiProbStat(ch-ch).txt")
         del self.count
 
 class TriWordPreprocessor(Preprocessor):
@@ -275,7 +294,7 @@ class TriWordPreprocessor(Preprocessor):
         self.count = defaultdict(lambda: defaultdict(int)) # "TriCntStat(dch-ch).txt"
         self.freq = defaultdict(lambda: defaultdict(lambda: defaultdict(int))) # "TriCntStat(dch-py-ch)"
         self.prob = defaultdict(lambda: defaultdict(lambda: defaultdict(float))) # "TriProbStat(dch-py-ch)"
-        self.save_path = Path.cwd()/".."/"refactored"/"TriCntStat(dch-py-ch).txt"
+        self.save_path = Path.cwd()/"refactored"/"TriCntStat(dch-py-ch).txt"
     
     def parse(self):
         for line in self.corpus:
@@ -286,6 +305,7 @@ class TriWordPreprocessor(Preprocessor):
         self.parse_corpus()
         self.IO()
         self.calc_prob_dchpych()
+        self.calc_prob_chch("./refactored/TriCntStat(dch-py-ch).txt", "./refactored/TriProbStat(dch-ch).txt")
         del self.count
 
     @metric
@@ -295,7 +315,7 @@ class TriWordPreprocessor(Preprocessor):
     
     @metric
     def calc_prob_dchpych(self):
-        self.save_path = Path.cwd()/".."/"refactored"/"TriProbStat(dch-py-ch).txt"
+        self.save_path = Path.cwd()/"refactored"/"TriProbStat(dch-py-ch).txt"
         for first in tqdm(self.count, desc="generating 'TriProbStat(dch-py-ch).txt'", unit="phrases"):
             for second, freq in self.count[first].items():
                 # TODO: 多音字处理
