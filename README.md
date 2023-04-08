@@ -1,3 +1,3 @@
 # PINYIN
 
-See the latest version at 'release' branch
+See the latest version at `release` branch
